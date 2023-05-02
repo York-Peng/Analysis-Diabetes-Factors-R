@@ -1,0 +1,871 @@
+---
+title: "10MT_Project_Diabetes_Analysis"
+author: "Peng Yuan"
+date: '2023-04-16'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Analysis of Diabetes Factors
+In this trial, the physical data of diabetic patients were used as a basis for predicting whether or not they had diabetes. The dataset contains the following data.
+
+Pregnancies	- Number of pregnancies (continuous variable)
+Glucose	- Check out the glucose contained in the body (continuous variable)
+BloodPressure	- Human blood pressure (continuous variable)
+SkinThickness	- (continuous variable)
+Insulin	- Insulin values in the body (continuous variable)
+BMI	- (continuous variable)
+DiabetesPedigreeFunction	- Provide a history of diabetes in relevant family members (continuous variable)
+Age	- (continuous variable)
+Outcome - Whether sick or not (categorical variable)
+
+This experiment will be divided into four parts. The first part is to perform a preliminary visual analysis of the data. The second part starts the modeling analysis of the different relationships of the variables. The third part is to compare and select the optimal model and perform prediction. the fourth part train/tune with resampling.
+
+
+
+### Part 0: Loading packages and data
+```{r,Load_package}
+library(tidyverse)
+library(dplyr)
+library(ggplot2)
+library(caret)
+library(coefplot)
+library(splines)
+library(yardstick)
+library(rstanarm)
+```
+
+```{r, read_data}
+df <- readr::read_csv("diabetes.csv", col_names = TRUE)
+
+df %>% glimpse()
+```
+
+
+## Part 1: Initial analysis of data visualization
+### 1.1 Factor Influence Heat Map
+```{r}
+df %>%
+  cor() %>%
+  corrplot::corrplot(type = "upper")
+```
+According to the heat map we can see that there is a correlation between the number of pregnancies, body glucose, BMI and age of the investigators whether they are sick or not.
+
+### 1.2 Age group proportion
+```{r}
+df <- df %>% mutate(Age_Group = cut(df$Age, breaks = c(0, 30, 50, max(df$Age)), labels = c("Under 30", "30-50", "Over 50")))
+```
+
+Bar mapping
+```{r}
+df %>% 
+  filter(Outcome == 1) %>%
+  ggplot() +
+  geom_bar(mapping = aes(x = Age_Group),fill = "steelblue")
+```
+Among the investigators, the majority of those with the disease were concentrated in their 30s and 50s.
+
+
+```{r}
+df %>% ggplot(mapping = aes(x = Age_Group)) + 
+  geom_bar(aes(fill = as.factor(Outcome)),position = 'fill') + 
+  scale_fill_brewer(name = 'outcome')
+```
+Looking at the percentage of patients in that age group reveals that the percentage of patients aged 30-50 is also the highest.
+
+### 1.3 Visualize the behavior of the binary outcome with respect to the continuous inputs
+```{r}
+df %>% 
+  ggplot(mapping = aes(x = Glucose, y = Outcome))+
+  geom_point(aes(col = Outcome)) + 
+  geom_smooth(method = 'loess', formula = y ~ x, size = 0.4)+
+  facet_wrap(~Age_Group, scales = "free")+
+  theme_bw()
+```
+For both groups below 30 years and above 50 years, the number of patients increases with higher Glucose.
+
+
+```{r}
+df %>% 
+  ggplot(mapping = aes(x = Pregnancies, y = Outcome))+
+  geom_point(aes(col = Outcome)) + 
+  geom_smooth(method = 'loess', formula = y ~ x, size = 0.4)+
+  facet_wrap(~Age_Group, scales = "free")+
+  theme_bw()
+```
+
+```{r}
+df %>% 
+  ggplot(mapping = aes(x = BMI, y = Outcome))+
+  geom_point(aes(col = Outcome)) + 
+  geom_smooth(method = 'loess', formula = y ~ x, size = 0.4)+
+  facet_wrap(~Age_Group, scales = "free")+
+  theme_bw()
+```
+
+```{r}
+df %>% 
+  ggplot(mapping = aes(x = Pregnancies + BMI + Glucose, y = Outcome))+
+  geom_point(aes(col = Outcome)) + 
+  geom_smooth(method = 'loess', formula = y ~ x, size = 0.4)+
+  facet_wrap(~Age_Group, scales = "free")+
+  theme_bw()
+```
+
+### 1.4 Box-line image
+```{r}
+df %>% ggplot() + 
+geom_boxplot(aes(Age, y = Pregnancies),
+                colour = "blue",
+                outlier.colour = "red") + 
+  facet_wrap(~Age_Group, scales = "free") +
+  theme_bw()
+```
+
+```{r}
+df %>% ggplot() + 
+geom_boxplot(aes(Age, y = BMI),
+                colour = "blue",
+                outlier.colour = "red") + 
+  facet_wrap(~Age_Group, scales = "free") +
+  theme_bw()
+```
+
+
+## Part 2: Modeling analysis
+### 2.1 Divide train set and test set
+```{r}
+df <- df %>% mutate(Bloodpress = ifelse(BloodPressure > 0 & BloodPressure < 90,
+                                        "Stand",
+                                         "Risk"))
+
+df %>% glimpse()
+```
+
+```{r}
+trainIndex <- sample(1:nrow(df), round(nrow(df)*0.2))
+
+train <- df[trainIndex, ]
+test <- df[-trainIndex, ]
+```
+
+
+### 2.2 Build Model
+#### 2.2.1 Categorical variables only – linear additive
+```{r}
+mod1_glm <- glm(Outcome ~ Age_Group + Bloodpress , train,family = "binomial")
+```
+
+#### 2.2.2 Continuous variables only – linear additive
+```{r}
+mod2_glm <- glm(Outcome ~ Pregnancies + Glucose + Insulin + BMI +  DiabetesPedigreeFunction, train,family = "binomial")
+```
+
+#### 2.2.3 All categorical and continuous variables – linear additive
+```{r}
+mod3_glm <- glm(Outcome ~ Pregnancies + Glucose + Insulin + BMI +  DiabetesPedigreeFunction + Age_Group + Bloodpress, train,family = "binomial")
+```
+
+#### 2.2.4 Interaction of the categorical inputs with all continuous inputs main effects
+```{r}
+mod4_glm <- glm(Outcome ~ (Pregnancies + Glucose + Insulin + BMI +  DiabetesPedigreeFunction) * (Age_Group + Bloodpress), train,family = "binomial")
+```
+
+#### 2.2.5 Add categorical inputs to all main effect and all pairwise interactions of continuous inputs
+```{r}
+mod5_glm <- glm(Outcome ~ (Pregnancies + Glucose + Insulin + BMI +  DiabetesPedigreeFunction)^2 + (Age_Group + Bloodpress), data = train,family = "binomial")
+```
+
+#### 2.2.6 Interaction of the categorical inputs with all main effect and all pairwise interactions of continuous inputs
+```{r}
+mod6_glm <- glm(Outcome ~ (I(Pregnancies)^2 + I(Glucose)^2 + I(Insulin)^2 + I(BMI)^2 +  I(DiabetesPedigreeFunction)^2) * (Age_Group + Bloodpress), train,family = "binomial")
+```
+
+### 2.3 Model Evaluation
+#### 2.3.1 R-square
+```{r}
+p1 <- broom::glance(mod1_glm)
+p2 <- broom::glance(mod2_glm)
+p3 <- broom::glance(mod3_glm)
+p4 <- broom::glance(mod4_glm)
+p5 <- broom::glance(mod5_glm)
+p6 <- broom::glance(mod6_glm)
+
+p_all <- rbind(p1,p2,p3,p4,p5,p6) %>%
+  tibble::rowid_to_column()
+
+p_all
+```
+
+```{r}
+p_all %>% 
+  ggplot(mapping = aes(x = c(1:6), y = deviance, group = 1))+
+  geom_path()+
+  geom_point(size = 2.0)+
+  theme_bw()
+```
+
+#### 2.3.2 AIC
+```{r}
+p_all %>%
+  ggplot(mapping = aes(x = c(1:6), y = AIC, group = 1)) +
+  geom_path(color = "red")+
+  geom_point(size = 2.0)+
+  theme_bw()
+```
+
+#### 2.3.3 BIC
+```{r}
+p_all %>%
+  ggplot(mapping = aes(x = c(1:6), y = BIC, group = 1))+
+  geom_path(color = "blue")+
+  geom_point(size = 2.0)+
+  theme_bw()
+```
+
+### 2.4 Prediction
+```{r,model1}
+mod1_predict <- predict(mod1_glm, test, type = "response")
+mod1_predict_class <- ifelse(mod1_predict > 0.50, 1, 0)
+matrix_mod1 <- confusionMatrix(as.factor(mod1_predict_class), as.factor(test$Outcome))
+matrix_mod1
+```
+
+```{r,model2}
+mod2_predict <- predict(mod2_glm, test, type = "response")
+mod2_predict_class <- ifelse(mod2_predict > 0.50, 1, 0)
+matrix_mod2 <- confusionMatrix(as.factor(mod2_predict_class), as.factor(test$Outcome))
+matrix_mod2
+```
+
+
+
+```{r,model3}
+mod3_predict <- predict(mod3_glm, test, type = "response")
+mod3_predict_class <- ifelse(mod3_predict > 0.50, 1, 0)
+matrix_mod3 <- confusionMatrix(as.factor(mod3_predict_class), as.factor(test$Outcome))
+matrix_mod3
+```
+
+
+```{r,model4}
+mod4_predict <- predict(mod4_glm, test, type = "response")
+mod4_predict_class <- ifelse(mod4_predict > 0.50, 1, 0)
+matrix_mod4 <- confusionMatrix(as.factor(mod4_predict_class), as.factor(test$Outcome))
+matrix_mod4
+```
+
+
+```{r,model5}
+mod5_predict <- predict(mod5_glm, test, type = "response")
+mod5_predict_class <- ifelse(mod5_predict > 0.50, 1, 0)
+matrix_mod5 <- confusionMatrix(as.factor(mod5_predict_class), as.factor(test$Outcome))
+matrix_mod5
+```
+
+
+```{r,model6}
+mod6_predict <- predict(mod6_glm, test, type = "response")
+mod6_predict_class <- ifelse(mod6_predict > 0.50, 1, 0)
+matrix_mod6 <- confusionMatrix(as.factor(mod6_predict_class), as.factor(test$Outcome))
+matrix_mod6
+```
+
+
+### 2.5 Presiction Evaluation
+#### 2.5.1 Accuracy
+```{r}
+perf_overall <- bind_rows(matrix_mod1$overall, 
+                      matrix_mod2$overall, 
+                      matrix_mod3$overall, 
+                      matrix_mod4$overall, 
+                      matrix_mod5$overall, 
+                      matrix_mod6$overall
+                      )
+```
+
+
+
+```{r}
+perf_overall %>%
+  ggplot(mapping = aes(x = c(1:6), y = Accuracy))+
+  geom_path()+
+  geom_point(size = 2.0)
+  theme_bw()
+```
+
+
+
+#### 2.5.2 Specificity
+```{r}
+perf_byClass <- bind_rows(matrix_mod1$byClass, 
+                      matrix_mod2$byClass, 
+                      matrix_mod3$byClass, 
+                      matrix_mod4$byClass, 
+                      matrix_mod5$byClass, 
+                      matrix_mod6$byClass)
+```
+
+
+```{r}
+perf_byClass %>%
+  ggplot(mapping = aes(x = c(1:6), y = Specificity))+
+  geom_path()+
+  geom_point(size = 2.0)
+  theme_bw()
+```
+
+#### 2.5.3 Sensitivity
+```{r}
+perf_byClass %>%
+  ggplot(mapping = aes(x = c(1:6), y = Sensitivity))+
+  geom_path()+
+  geom_point(size = 2.0)
+  theme_bw()
+```
+
+#### 2.5.4 Precision
+```{r}
+perf_byClass %>%
+  ggplot(mapping = aes(x = c(1:6), y = Precision))+
+  geom_path()+
+  geom_point(size = 2.0)
+  theme_bw()
+```
+
+According to all analysis, model 2 and model 3 are the best and the second best model. Because they have low AIC and BIC, and also have high precision, sensitivity and Accurancy. Although model 3 Specificity is not very good, but I think overall he is still a model worth continuing to try to conduct analysis.
+
+
+### 2.6 Presiction Evaluation
+#### 2.6.1 Model 2
+```{r}
+mod2_glm %>%
+  coefplot(scales = "free", sort = "natural", pointSize = 1, innerCI = 0.5)+
+  geom_vline(xintercept = 0, color = "red")+
+  theme_bw()+
+  theme(legend.position = 'none')
+```
+
+```{r}
+import_mod2 <- mod2_glm %>% 
+  coefplot(sort = "magnitude", plot = FALSE) %>%
+  tibble::as_tibble() %>%
+  filter((HighOuter > 0 & LowOuter > 0) | (HighOuter < 0 & LowOuter < 0))
+
+import_mod2
+```
+
+There are 4 significant coefficient features in model 2 and Glucose is the most important.
+
+
+#### 2.6.2 Model 3
+```{r}
+mod3_glm %>%
+  coefplot(scales = "free", sort = "natural", pointSize = 1, innerCI = 0.5)+
+  geom_vline(xintercept = 0, color = "red")+
+  theme_bw()+
+  theme(legend.position = 'none')
+```
+
+
+```{r}
+import_mod3 <- mod3_glm %>% 
+  coefplot(sort = "magnitude", plot = FALSE) %>%
+  tibble::as_tibble() %>%
+  filter((HighOuter > 0 & LowOuter > 0) | (HighOuter < 0 & LowOuter < 0))
+
+import_mod3
+```
+
+## Part 3 Model compare and selection
+### 3.1 Fit Model
+#### 3.1.1 Model 2
+```{r}
+class_stan_glm_mod2 <- stan_glm(formula(mod2_glm), 
+                         data = df,
+                         family = binomial(link = "logit"),
+                         prior_intercept = NULL,
+                         refresh = 0,
+                         seed = 123123,
+                         chains = 1, 
+                         iter = 300)
+```
+#### 3.1.2 Model 3
+```{r}
+class_stan_glm_mod3 <- stan_glm(formula(mod3_glm), 
+                         data = df,
+                         family = binomial(link = "logit"),
+                         prior_intercept = NULL,
+                         refresh = 0,
+                         seed = 123123,
+                         chains = 1, 
+                         iter = 300)
+```
+
+### 3.2 WAIC compare
+```{r}
+class_stan_glm_mod2$waic <- waic(class_stan_glm_mod2)
+class_stan_glm_mod3$waic <- waic(class_stan_glm_mod3)
+
+loo_class_stan_glm_mod2 <- loo(class_stan_glm_mod2)
+loo_class_stan_glm_mod3 <- loo(class_stan_glm_mod3)
+```
+
+```{r}
+plot(loo_class_stan_glm_mod2, label_points = TRUE)
+```
+
+```{r}
+plot(loo_class_stan_glm_mod3, label_points = TRUE)
+```
+
+```{r}
+loo_compare(loo_class_stan_glm_mod2, loo_class_stan_glm_mod3)
+```
+
+According to the WAIC compare, I think the model 3 is the best model.
+
+
+## Part 4 Train/tune with resampling
+### 4.1 Accuracy - AUC
+#### 4.1.1 Train parameter
+```{r}
+my_ctrl_acc <- trainControl(method = "repeatedcv",
+                            number = 5,
+                            repeats = 3,
+                            savePredictions = TRUE)
+
+my_metric_acc <- "Accuracy"
+```
+
+#### 4.1.2 Build Model
+**All categorical and continuous inputs - linear additive features**
+```{r}
+df_4 <- df %>% subset(select =  c(Pregnancies, Glucose, Insulin,
+                                  BMI, DiabetesPedigreeFunction, Age_Group,
+                                  Bloodpress)) %>%
+  mutate(outcome = ifelse(df$Outcome == 1,
+                          "event",
+                          "non_event"))
+```
+
+
+```{r}
+set.seed(1234)
+acc_glm_add <- train(outcome ~ .,
+                  data = df_4,
+                  method = "glm",
+                  metric = my_metric_acc,
+                  preProcess = c("center", "scale"),
+                  trControl = my_ctrl_acc)
+
+acc_glm_add
+```
+
+#### 4.1.3 Regularized regression with Elastic net
+```{r}
+set.seed(1234)
+acc_glm_enet_pair <- train(outcome ~ .,
+                  data = df_4,
+                  method = "glmnet",
+                  metric = my_metric_acc,
+                  preProcess = c("center", "scale"),
+                  trControl = my_ctrl_acc)
+
+acc_glm_enet_pair
+```
+
+#### 4.1.4 Neural network
+```{r}
+set.seed(1234)
+acc_nnet_warmup <- train(outcome ~ .,
+                  data = df_4,
+                  method = "nnet",
+                  metric = my_metric_acc,
+                  preProcess = c("center", "scale"),
+                  trControl = my_ctrl_acc,
+                  trace = FALSE)
+```
+
+```{r}
+plot(acc_nnet_warmup, xTrans = log)
+```
+
+**Tune**
+```{r}
+tune_grid_neural <- expand.grid(size = c(3, 5, 10, 15, 20),
+                         decay = exp(seq(-9, 0, length.out = 11)))
+
+acc_nnet_tune <- train(outcome ~ .,
+                    data = df_4,
+                    method = "nnet",
+                    metric = my_metric_acc,
+                    tuneGrid = tune_grid_neural,
+                    preProcess = c("center", "scale"),
+                    trControl = my_ctrl_acc,
+                    trace = FALSE)
+
+plot(acc_nnet_tune, xTrans = log)
+```
+
+#### 4.1.5 Random forest
+```{r}
+set.seed(1234)
+acc_rf_warmup <- train(outcome ~ .,
+                  data = df_4,
+                  method = "rf",
+                  metric = my_metric_acc,
+                  preProcess = c("center", "scale"),
+                  trControl = my_ctrl_acc,
+                  trace = FALSE)
+```
+
+```{r}
+plot(acc_rf_warmup, xTrans = log)
+```
+
+**Tune**
+```{r}
+set.seed(1234)
+acc_rf_tune <- train(outcome ~ .,
+                  data = df_4,
+                  method = "rf",
+                  metric = my_metric_acc,
+                  trControl = my_ctrl_acc,
+                  tuneGrid = expand.grid(mtry = seq(2, 8, by = 1)),
+                  importance = TRUE)
+```
+
+```{r}
+plot(acc_rf_tune, xTrans = log)
+```
+
+
+
+#### 4.1.6 Gradient boosted tree
+```{r}
+set.seed(1234)
+acc_gbm_warmup <- train(outcome ~ .,
+                      data = df_4,
+                      method = "gbm",
+                      metric = my_metric_acc,
+                      trControl = my_ctrl_acc,
+                      verbose = FALSE)
+
+plot(acc_gbm_warmup)
+```
+**Tune**
+```{r}
+acc_gbm_grid <- expand.grid(n.trees = c(100, 150, 300, 500, 750, 1000),
+                        shrinkage = c(0.01, 0.1),
+                        interaction.depth = acc_gbm_warmup$bestTune$interaction.depth,
+                        n.minobsinnode = acc_gbm_warmup$bestTune$n.minobsinnode)
+```
+
+```{r}
+set.seed(1234)
+acc_gbm_tune <- train(outcome ~ .,
+                      data = df_4,
+                      method = "gbm",
+                      metric = my_metric_acc,
+                      tuneGrid = acc_gbm_grid,
+                      trControl = my_ctrl_acc,
+                      verbose=FALSE)
+
+plot(acc_gbm_tune)
+```
+
+#### 4.1.7 SVM
+```{r}
+set.seed(1234)
+acc_svm_warmup <- train(outcome ~ .,
+                 data = df_4,
+                 method = "svmRadial",
+                 metric = my_metric_acc,
+                 preProcess = c("center", "scale"),
+                 trControl = my_ctrl_acc)
+
+plot(acc_svm_warmup)
+```
+
+**Tune**
+```{r}
+svm_grid <- expand.grid(sigma = seq(0.01, 1, length = 10),
+                    C = 2^(-5:5))
+
+```
+
+```{r}
+set.seed(1234)
+acc_svm_tuned <- train(outcome ~ .,
+                 data = df_4,
+                 method = "svmRadial",
+                 metric = my_metric_acc,
+                 tuneGrid = svm_grid,
+                 preProcess = c("center", "scale"),
+                 trControl = my_ctrl_acc)
+
+plot(acc_svm_tuned)
+```
+
+### 4.2 ROC
+#### 4.2.1 Train parameter
+```{r}
+my_ctrl <- trainControl(method = "repeatedcv",
+                        number = 5,
+                        repeats = 3,
+                        summaryFunction = twoClassSummary,
+                        classProbs = TRUE,
+                        savePredictions = TRUE)
+
+my_metric <- "ROC"
+```
+
+#### 4.2.2 Build model
+```{r}
+set.seed(1234)
+roc_glm_add <- train(outcome ~ .,
+                  data = df_4,
+                  method = "glm",
+                  metric = my_metric,
+                  preProcess = c("center", "scale"),
+                  trControl = my_ctrl)
+
+roc_glm_add
+```
+
+
+#### 4.2.3 Regularized regression with Elastic net
+```{r}
+set.seed(1234)
+roc_glm_enet <- train(outcome ~ .,
+                  data = df_4,
+                  method = "glmnet",
+                  metric = my_metric,
+                  preProcess = c("center", "scale"),
+                  trControl = my_ctrl)
+
+roc_glm_enet
+```
+
+#### 4.2.4 Neural network
+```{r}
+set.seed(1234)
+roc_nnet_warmup <- train(outcome ~ .,
+                  data = df_4,
+                  method = "nnet",
+                  metric = my_metric,
+                  preProcess = c("center", "scale"),
+                  trControl = my_ctrl,
+                  trace = FALSE)
+```
+
+```{r}
+plot(roc_nnet_warmup, xTrans = log)
+```
+
+**Tune**
+```{r}
+roc_nnet_tune <- train(outcome ~ .,
+                    data = df_4,
+                    method = "nnet",
+                    metric = my_metric,
+                    tuneGrid = tune_grid_neural,
+                    preProcess = c("center", "scale"),
+                    trControl = my_ctrl,
+                    trace = FALSE)
+
+plot(roc_nnet_tune, xTrans = log)
+```
+
+
+#### 4.2.5 Random forest
+```{r}
+set.seed(1234)
+roc_rf_warmup <- train(outcome ~ .,
+                  data = df_4,
+                  method = "rf",
+                  metric = my_metric,
+                  preProcess = c("center", "scale"),
+                  trControl = my_ctrl,
+                  trace = FALSE)
+```
+
+```{r}
+plot(roc_rf_warmup, xTrans = log)
+```
+
+**Tune**
+```{r}
+set.seed(1234)
+roc_rf_tune <- train(outcome ~ .,
+                  data = df_4,
+                  method = "rf",
+                  metric = my_metric,
+                  trControl = my_ctrl,
+                  tuneGrid = expand.grid(mtry = seq(2, 8, by = 1)),
+                  importance = TRUE)
+```
+
+```{r}
+plot(roc_rf_tune, xTrans = log)
+```
+
+
+#### 4.2.6 Gradient boosted tree
+```{r}
+set.seed(1234)
+roc_gbm_warmup <- train(outcome ~ .,
+                      data = df_4,
+                      method = "gbm",
+                      metric = my_metric,
+                      trControl = my_ctrl,
+                      verbose = FALSE)
+
+plot(roc_gbm_warmup)
+```
+
+**Tune** 
+```{r}
+roc_gbm_grid <- expand.grid(n.trees = c(100, 150, 300, 500, 750, 1000),
+                        shrinkage = c(0.01, 0.1),
+                        interaction.depth = roc_gbm_warmup$bestTune$interaction.depth,
+                        n.minobsinnode = roc_gbm_warmup$bestTune$n.minobsinnode)
+```
+
+```{r}
+set.seed(1234)
+roc_gbm_tune <- train(outcome ~ .,
+                      data = df_4,
+                      method = "gbm",
+                      metric = my_metric,
+                      tuneGrid = roc_gbm_grid,
+                      trControl = my_ctrl,
+                      verbose=FALSE)
+
+plot(roc_gbm_tune)
+```
+
+#### 4.2.7 SVM
+```{r}
+set.seed(1234)
+roc_svm_warmup <- train(outcome ~ .,
+                 data = df_4,
+                 method = "svmRadial",
+                 metric = my_metric,
+                 preProcess = c("center", "scale"),
+                 trControl = my_ctrl)
+
+plot(roc_svm_warmup)
+```
+
+**Tune**
+```{r}
+set.seed(1234)
+roc_svm_tuned <- train(outcome ~ .,
+                 data = df_4,
+                 method = "svmRadial",
+                 metric = my_metric,
+                 tuneGrid = svm_grid,
+                 preProcess = c("center", "scale"),
+                 trControl = my_ctrl)
+
+plot(roc_svm_tuned)
+```
+
+
+### 4.3 Identify the best model.
+#### 4.3.1 Accurancy
+```{r}
+ACC_perform <- resamples(list(ACC_GLM_ADD = acc_glm_add,
+                                 ENET_PAIR = acc_glm_enet_pair,
+                                 GBM_WARMUP = acc_gbm_warmup,
+                                 GBM_TUNE = acc_gbm_tune,
+                                 NNET_WARMUP = acc_nnet_warmup,
+                                 NNET_TUNE = acc_nnet_tune,
+                                 RF_WARMUP = acc_rf_warmup,
+                                 RF_TUNE = acc_rf_tune,
+                                 SVM_WARMUOP = acc_svm_warmup,
+                                 SVM_TUNE = acc_svm_tuned
+                                 )
+                            )
+```
+
+```{r}
+dotplot(ACC_perform, metric = "Accuracy")
+```
+
+According to the Accuracy result, NNet tuned model is the best.
+
+#### 4.3.2 ROC
+```{r}
+ROC_perform <- resamples(list(ACC_GLM_ADD = roc_glm_add,
+                                 ENET_PAIR = roc_glm_enet,
+                                 GBM_WARMUP = roc_gbm_warmup,
+                                 GBM_TUNE = roc_gbm_tune,
+                                 NNET_WARMUP = roc_nnet_warmup,
+                                 NNET_TUNE = roc_nnet_tune,
+                                 RF_WARMUP = roc_rf_warmup,
+                                 RF_TUNE = roc_rf_tune,
+                                 SVM_WARMUOP = roc_svm_warmup,
+                                 SVM_TUNE = roc_svm_tuned
+                                 )
+                            )
+```
+
+```{r}
+dotplot(ROC_perform, metric = "ROC")
+```
+
+According to the ROC, the best model is the SVM tuned model.
+
+
+## 5. Final analysis
+### 5.1 Find the important feature in two model
+I choose the NNet to do the final analysis
+#### NNet tuned model
+```{r}
+library(NeuralNetTools)
+olden(acc_nnet_tune$finalModel)
+```
+
+### 5.2 Train best model and draw ROC curve
+```{r}
+trainIndex_new <- sample(1:nrow(df_4), round(nrow(df_4)*0.2))
+
+train_new <- df_4[trainIndex_new, ]
+test_new <- df_4[-trainIndex_new, ]
+```
+
+```{r}
+acc_nnet_tune_train <- train(outcome ~ .,
+                    data = train_new,
+                    method = "nnet",
+                    metric = my_metric_acc,
+                    tuneGrid = tune_grid_neural,
+                    preProcess = c("center", "scale"),
+                    trControl = my_ctrl_acc,
+                    trace = FALSE)
+```
+
+
+
+```{r}
+library(pROC)
+grid_pred <- predict(acc_nnet_tune_train, test_new, type = "prob")
+grid_pred %>% glimpse()
+
+grid_roc <- roc(test_new$outcome, grid_pred[,1])
+plot.roc(grid_roc)
+```
+
+```{r}
+Total_count <- grid_roc$sensitivities + grid_roc$specificities
+Best_Threshold <- which(Total_count == max(Total_count))
+Best_cutoff <- grid_roc$thresholds[Best_Threshold]
+Best_cutoff
+```
+
