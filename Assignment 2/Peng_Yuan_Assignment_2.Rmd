@@ -1,0 +1,264 @@
+---
+title: "Assignment 2"
+author: "Peng Yuan"
+date: '2023-03-07'
+output: html_document
+---
+
+### Q5.7 
+
+**Table 5.7 shows a small set of predictive model validation results for a classification model, with both actual values and propensities.**
+
+**a. Calculate error rates, sensitivity, and specificity using cutoffs of 0.25, 0.5, and 0.75. **
+```{r,5.1_read_data}
+library(caret)
+data <- read.csv("Table5.7.csv")
+data
+```
+
+```{r,5.1_a_25}
+# cutoff value = 0.25
+confusionMatrix(as.factor(ifelse(data$Propensity > 0.25, 1, 0)), as.factor(data$Actual))
+```
+Cutoff value = 0.25: Error Rate = 1 - 0.6 = 0.4, Sensitivity = 0.5294, Specificity = 1
+
+```{r,5.1_a_5}
+# cutoff value = 0.5
+confusionMatrix(as.factor(ifelse(data$Propensity > 0.5, 1, 0)), as.factor(data$Actual))
+```
+Cutoff value = 0.5: Error Rate = 0.1, Sensitivity = 0.8824, Specificity = 1
+
+```{r}
+# cutoff value = 0.75
+confusionMatrix(as.factor(ifelse(data$Propensity > 0.75, 1, 0)), as.factor(data$Actual))
+```
+Cutoff value = 0.75: Error Rate = 0.05, Sensitivity = 1, Specificity = 0.6667
+
+
+**b. Create a decile-wise lift chart in R.**
+```{r,5.1_b_library}
+library(gains)
+```
+
+```{r,5.1_b}
+gain <- gains(data$Actual, data$Propensity)
+
+heights <- gain$mean.resp/mean(data$Actual)
+midpoints <- barplot(heights, names.arg = gain$depth, ylim = c(0,9), 
+                     xlab = "Percentile", ylab = "Mean Response", main = "Decile-wise lift chart")
+text(midpoints, heights + 0.5, labels=round(heights, 1), cex = 0.8)
+```
+### Q 10.1 
+**Financial Condition of Banks. The file Banks.csv includes data on a sample of 20 banks. The “Financial Condition” column records the judgment of an expert on the financial condition of each bank. This outcome variable takes one of two possible values—weak or strong—according to the financial condition of the bank. The predictors are two ratios used in the financial analysis of banks: TotLns&Lses/Assets is the ratio of total loans and leases to total assets and TotExp/Assets is the ratio of total expenses to total assets. The target is to use the two ratios for classifying the financial condition of a new bank.**
+**Run a logistic regression model (on the entire dataset) that models the status of a bank as a function of the two financial measures provided. Specify the success class as weak (this is similar to creating a dummy that is 1 for financially weak banks and 0 otherwise), and use the default cutoff value of 0.5.**
+```{r,10_1_load_data}
+banks <- read.csv("banks.csv")
+head(banks)
+```
+
+```{r}
+set.seed(123, sample.kind="Rejection")
+logreg = glm(Financial.Condition ~ TotExp.Assets + TotLns.Lses.Assets, data = banks, family = "binomial")
+summary(logreg)
+```
+
+
+**a. Write the estimated equation that associates the financial condition of a bank with its two predictors in three formats:**
+**i. The logit as a function of the predictors**
+$$
+logit = \log \left(odds \right) = \log \left( \frac{p}{1-p} \right) 
+\\= -14.721 + 89.834 \times TotExp.Assets + 8.371 \times TotLns.Lses.Assets
+$$
+**ii. The odds as a function of the predictors**
+$$
+odds = \frac{p} {1-p} = e^ \left( -14.721 + 89.834 \times TotExp.Assets + 8.371 \times TotLns.Lses.Assets \right)
+$$
+**iii. The probability as a function of the predictors**
+$$
+p = \frac{1} {1 + e^ \left[ - \left( -14.721 + 89.834 \times TotExp.Assets + 8.371 \times TotLns.Lses.Assets \right) \right]}
+$$
+
+**b. Consider a new bank whose total loans and leases/assets ratio = 0.6 and total expenses/assets ratio = 0.11. From your logistic regression model, estimate the following four quantities for this bank (use R to do all the intermediate calcula- tions; show your final answers to four decimal places): the logit, the odds, the probability of being financially weak, and the classification of the bank (use cutoff = 0.5).**
+```{r,10_1_b}
+logit = -14.721 + 89.834*0.11 + 8.371*0.6
+odds = exp(-14.721 + 89.834*0.11 + 8.371*0.6)
+p = 1/(1 + exp(-(-14.721 + 89.834*0.11 + 8.371*0.6)))
+print(logit)
+print(odds)
+print(p)
+```
+Because p value is greater than 0.5, the classification is weak
+
+
+
+**c. The cutoff value of 0.5 is used in conjunction with the probability of being finan- cially weak. Compute the threshold that should be used if we want to make a classification based on the odds of being financially weak, and the threshold for the corresponding logit.**
+odds = p/(1-p) = 0.5/0.5 = 1
+logit = log(odds) = log1 = 0
+
+
+**d. Interpret the estimated coefficient for the total loans & leases to total assets ratio (TotLns&Lses/Assets) in terms of the odds of being financially weak.**
+Because the coefficient for the total loans & leases to total assets ratio (TotLns&Lses/Assets) is 8.371
+```{r,10_d}
+exp(8.371)
+```
+If 1-unit increase in the variable TotLns.Lses.Assets, odds will increase 4319.954 
+
+
+**e. When a bank that is in poor financial condition is misclassified as financially strong, the misclassification cost is much higher than when a financially strong bank is misclassified as weak. To minimize the expected cost of misclassification, should the cutoff value for classification (which is currently at 0.5) be increased or decreased?**
+If we want to minimize the expected cost of misclassification, we need to increase the sensitivity = TP/(TP+FN). When the cutoff value decrease, the TP will increase and the FN will decrease. As a result, the sensitivity increase. Thus, we need decreade the cutoff value.
+
+### Q 10.2
+**Identifying Good System Administrators. A management consultant is study- ing the roles played by experience and training in a system administrator’s ability to complete a set of tasks in a specified amount of time. In particular, she is interested in discriminating between administrators who are able to complete given tasks within a specified time and those who are not. Data are collected on the performance of 75 randomly selected administrators. They are stored in the file SystemAdministrators.csv.**
+
+**The variable Experience measures months of full-time system administrator expe- rience, while Training measures the number of relevant training credits. The outcome variable Completed is either Yes or No, according to whether or not the administrator completed the tasks.**
+```{r,10_2_load_data}
+system <- read.csv("SystemAdministrators.csv")
+summary(system)
+```
+
+**a. Create a scatter plot of Experience vs. Training using color or symbol to distinguish programmers who completed the task from those who did not complete it. Which predictor(s) appear(s) potentially useful for classifying task completion?**
+```{r,10_2_a_library}
+library(ggplot2)
+library(magrittr)
+```
+
+```{r,10_2_a_ggplot}
+system %>% ggplot() + 
+           geom_point(mapping = aes(x = Experience, y = Training, 
+                                   color = Completed.task)) +
+           labs(x = "Experience", y = "Training")
+```
+
+Most of the points for task completion are concentrated in the more experienced values, so it can be argued that experience is useful for classifying task completion
+
+
+**b. Run a logistic regression model with both predictors using the entire dataset as training data. Among those who completed the task, what is the percentage of programmers incorrectly classified as failing to complete the task?**
+
+```{r,10_2_b_build_model}
+system$Completed.task <- ifelse(system$Completed.task == "Yes", 
+                                1,
+                                0)
+
+log_reg <- glm(Completed.task ~ ., data = system, family = "binomial")
+summary(log_reg)
+```
+
+```{r,10_2_b_Matrix}
+system$predProbs = predict(log_reg, newdata = system, type="response")
+
+confusionMatrix(as.factor(ifelse(system$predProbs > 0.5,
+                                 1,
+                                 0)),
+                as.factor(system$Completed.task))
+```
+
+FPR = FP/(TN+FP) = 1 - Specificity = 0.3333, which is the rate that the EVENT is incorrectly predicted.
+
+
+
+**c. To decrease the percentage in part (b), should the cutoff probability be increased or decreased?**
+
+In order to decrease the percentage in b, we need to increase the specificity, which is TN/(TN+FP). When TN increase and FP decrease, the specificity will increases. As a result, the cutoff value should be increased.
+
+
+**d. How much experience must be accumulated by a programmer with 4 years of training before his or her estimated probability of completing the task exceeds 0.5?**
+According to the regression model, we can obtain the probability function p = 1/(1 + e^-(-10.9813 + 1.1269 * Experience + 0.1805 * training). Thus, when the training = 4, experience needs to be higher than 9.1 for p to exceed 0.5.
+
+### Q 10.3
+**Sales of Riding Mowers. A company that manufactures riding mowers wants to identify the best sales prospects for an intensive sales campaign. In particular, the man- ufacturer is interested in classifying households as prospective owners or nonowners on the basis of Income (in $1000s) and Lot Size (in 1000 ft2). The marketing expert looked at a random sample of 24 households, given in the file RidingMowers.csv.**
+
+**Use all the data to fit a logistic regression of ownership on the two predictors.**
+
+```{r,10_3_load_data}
+riding <- read.csv("RidingMowers.csv")
+summary(riding)
+```
+
+**a. What percentage of households in the study were owners of a riding mower?**
+```{r}
+library(tidyverse)
+```
+
+```{r,10_3_a}
+riding <- riding %>% mutate(judge = ifelse(riding$Ownership == "Owner",1,0))
+riding
+```
+
+```{r}
+mean(riding$judge)
+```
+According to the calculate, about 50% of households in the study were owners of a riding mower.
+
+
+
+**b. Create a scatter plot of Income vs. Lot Size using color or symbol to distinguish owners from nonowners. From the scatter plot, which class seems to have a higher average income, owners or nonowners?**
+```{r,10_3_b}
+riding %>% ggplot() + 
+           geom_point(mapping = aes(x = Income, y = Lot_Size, color = Ownership)) +
+           labs(x = "Income", y = "Lot_Size")
+```
+According to the diagram, owners seem to have a higher average income.
+
+
+**c. Among nonowners, what is the percentage of households classified correctly?**
+
+```{r,10_3_c_build_model}
+log_reg_3 <- glm(judge ~ Income + Lot_Size, data = riding, family = "binomial")
+summary(log_reg_3)
+```
+
+
+```{r,10_3_c_matrix}
+riding$predProbs <- predict(log_reg_3, newdata = riding, type = "response")
+
+confusionMatrix(as.factor(ifelse(riding$predProbs > 0.5, 
+                                 1, 
+                                 0)), 
+                as.factor(riding$judge))
+```
+
+As a result,the percentage of households in nonowners classified correctly is TP/(TP+FN) = Specificity = 0.8333
+
+
+**d. To increase the percentage of correctly classified nonowners, should the cutoff probability be increased or decreased?**
+In order to increase the percentage of correctly classified nonowners, we need to decrease the Specificity.As a result, the cutoff value should be increased
+
+
+
+**e. What are the odds that a household with a $60K income and a lot size of 20,000 ft2 is an owner?**
+```{r,10_3_e}
+odds_2 = exp(-25.9382 + 0.1109*60 + 0.9638*20)
+odds_2
+```
+
+
+**f. What is the classification of a household with a $60K income and a lot size of 20,000 ft2? Use cutoff = 0.5.**
+```{r,10_3_f}
+p <- 1/(1 + exp(25.9382 - 0.1109*60 - 0.9638*20))
+
+if (p > 0.5){
+  print("Owner")
+}else{
+  print("Nonowner")
+}
+```
+
+**g. What is the minimum income that a household with 16,000 ft2 lot size should have before it is classified as an owner?**
+Assume we still use cutoff value = 0.5 here. 
+p = 1/(1+e^-(-25.9382 + 0.1109 * Income + 0.9638 * Lot_Size)), set Lot_Size = 16. If we want to classified it as an owner, we need the p higher than 0.5. 
+Under such conditions, the Income needs to be higher than 85.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
