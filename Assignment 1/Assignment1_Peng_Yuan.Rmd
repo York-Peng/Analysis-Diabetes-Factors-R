@@ -1,0 +1,321 @@
+---
+title: "Assignment1"
+author: "Peng Yuan"
+date: '2023-02-16'
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Q1: Interpreting regression results and p-values.
+
+**If the p-value of the null hypothesis is small (usually less than 0.05), we will reject the null hypothesis and conclude that there is a relationship between the independent variable and sales. If the p-value is large (usually greater than 0.05), we can conclude that there is no evidence of a relationship between the independent variable and sales.**
+
+**Null hypothesis for TV as H0: Because the p-value of TV is less than 0.0001, so we have enough evidence to reject null hypothesis and we can consider that TV advertising budgets have significant effect on product sales.**
+
+**Null hypothesis for radio as H0: Because the p-value of radio is less than 0.0001, so we have enough evidence to reject null hypothesis and we can consider that radio have significant effect on product sales.**
+
+**Null hypothesis for newspaper as H0: Because the p-value of newspaper is 0.8599, so we don't have enough evidence to reject null hypothesis and we can consider that newspaper advertising budgets have no effect on product sales.**
+
+## Q3: interpreting interactions.
+### a
+**i**
+Incorrect. When the IQ and GPA is fixed, the function for salary is:
+$$
+Salary = 50 + 20 \times GPA + 0.07 \times IQ + 35 \times Level + 0.01 \times GPA \times IQ - 10 \times GPA \times Level
+\\ = (35 - 10 \times GPA)\times Level + 50 + 20 \times GPA + 0.07 \times IQ + 0.01 \times GPA \times IQ
+$$
+When their GPA is higher than 3.5, high school graduates earn more. Otherwise, college graduates earn more. Thus, we can't consider that high school graduates earn more, on average, than college graduates.
+
+**ii**
+Incorrect. The reason is the same as the one mentioned in answer i. When their GPA is lower than 3.5, college graduates earn more. Otherwise, high school graduates earn more.
+
+**iii**
+Correct. because when the GPA is higher than 3.5, the 35 - 10 x GPA in the formula mentioned in i will be less than 0. This is when high school graduates earn more on average than college graduates for a fixed IQ and GPA.
+
+**iv**
+Same reason as iii, therefore incorrect
+
+
+### b
+Bring IQ = 110, GPA = 4.0 into the equation of a.i for calculation. salary = 137.1.
+
+### c
+False. If we want to check the interaction between two variables, we need to see the p-value instead of the coefficient. Even if the value of coefficient for interaction term is very small, we can’t say there is very little interaction effect.
+
+
+
+## Q10: regression analysis of carseats data (ISLR package).
+
+```{r}
+library(ISLR)
+```
+
+**(a) Fit a multiple regression model to predict Sales using Price, Urban, and US**
+
+```{r,a}
+fit = lm(Sales ~ Price + Urban + US, data = Carseats)
+summary(fit)
+```
+
+**(b) Provide an interpretation of each coefficient in the model. Be careful---some of the variables in the model are qualitative!** "Price": According to it's p-value(less than 2e-16), it can be considered as an important value. According to it's Estimate, we can know that when the price increase one unit, the sales will decrease 0.054459 unit.
+
+"Urban": According to it's p-value(0.936), it can't be considered as an important value.
+
+"US": According to it's p-value(4.86e-06), it can be considered as an important value. According to it's Estimate, we can know that when the price increase one unit, the sales will increase 1.200573 unit.
+
+**(c) Write out the model in equation form, being careful to handle the qualitative variables properly.** 
+
+Sales = 13.043469 - 0.054459 x Price - 0.021916 x Urban + 1.200573 x US
+
+**(d) For which of the predictors can you reject the null hypothesis H0 : βj = 0?** 
+
+For 'Price' and 'US', I think we can reject the null hypothesis because their p-value are less than 0.05.
+
+**(e)On the basis of your response to the previous question, fit a smaller model that only uses the predictors for which there is evidence of association with the outcome.**
+
+```{r,10_e}
+fit_Sales_Price_US = lm(Sales ~ Price  + US, data = Carseats)
+summary(fit_Sales_Price_US)
+```
+
+**(f) How well do the models in (a) and (e) fit the data?** 
+
+The overall standard error, p-value, of both Price and US decreases in (e) and the Adjusted R-squared of the model increases. This indicates that the values of model e look more like a good model relative to model a.
+
+
+
+
+**(g) Using the model from (e), obtain 95 % confidence intervals for the coefficient(s).**
+
+```{r,10_g}
+confint(fit_Sales_Price_US, level = 0.95)
+```
+
+**(h) Is there evidence of outliers or high leverage observations in the model from (e)?**
+
+```{r,10_h}
+par(mfrow=c(2,2))
+plot(fit_Sales_Price_US)
+```
+
+**Residuals vs Leverage seems to be violated. There are lots of outliers and those point have high leverage.**
+
+## Q15: regression analysis of Boston housing data (MASS package)
+
+```{r}
+library(MASS)
+library(ggplot2)
+```
+
+**(a) For each predictor, fit a simple linear regression model to predict the response. Describe your results. In which of the models is there a statistically significant association between the predictor and the response? Create some plots to back up your assertions**
+```{r}
+fit_zn <- lm(crim ~ zn, data = Boston)
+fit_indus <- lm(crim ~ indus, data = Boston)
+fit_chas <- lm(crim ~ chas, data = Boston)
+fit_nox <- lm(crim ~ nox, data = Boston)
+fit_rm <- lm(crim ~ rm, data = Boston)
+fit_age <- lm(crim ~ age, data = Boston)
+fit_dis <- lm(crim ~ dis, data = Boston)
+fit_rad <- lm(crim ~ rad, data = Boston)
+fit_tax <- lm(crim ~ tax, data = Boston)
+fit_ptratio <- lm(crim ~ ptratio, data = Boston)
+fit_black <- lm(crim ~ black, data = Boston)
+fit_lstat <- lm(crim ~ lstat, data = Boston)
+fit_medv <- lm(crim ~ medv, data = Boston)
+```
+
+```{r}
+par(mfrow=c(2,2))
+plot(fit_zn)
+```
+
+
+```{r}
+par(mfrow=c(2,2))
+plot(fit_indus)
+```
+
+```{r}
+par(mfrow=c(2,2))
+plot(fit_chas)
+```
+
+```{r}
+par(mfrow=c(2,2))
+plot(fit_nox)
+```
+
+
+```{r}
+par(mfrow=c(2,2))
+plot(fit_rm)
+```
+
+```{r}
+par(mfrow=c(2,2))
+plot(fit_age)
+```
+
+```{r}
+par(mfrow=c(2,2))
+plot(fit_dis)
+```
+
+
+
+```{r}
+par(mfrow=c(2,2))
+plot(fit_rad)
+```
+
+
+```{r}
+par(mfrow=c(2,2))
+plot(fit_tax)
+```
+
+
+
+```{r}
+par(mfrow=c(2,2))
+plot(fit_ptratio)
+```
+
+
+```{r}
+par(mfrow=c(2,2))
+plot(fit_black)
+```
+
+
+```{r}
+par(mfrow=c(2,2))
+plot(fit_lstat)
+```
+
+
+```{r}
+par(mfrow=c(2,2))
+plot(fit_medv)
+```
+
+**For all variables, except chas are significant.**
+
+
+**(b)Fit a multiple regression model to predict the response using all of the predictors. Describe your results. For which predictors can we reject the null hypothesis H0 : βj = 0?**
+```{r,15_b}
+lm_fit3 = lm(crim ~., data = Boston)
+summary(lm_fit3)
+```
+
+**For zn, dis, rad, black and medv, we can reject the null hypothesis.**
+
+
+**(c) How do your results from (a) compare to your results from (b)?Create a plot displaying the univariate regression coefficients from (a) on the x-axis, and the multiple regression coefficients from (b) on the y-axis. That is, each predictor is displayed as a single point in the plot. Its coefficient in a simple linear regression model is shown on the x-axis, and its coefficient  estimatein the multiple linear regression model is shown on the y-axis.**
+
+```{r}
+x_variable <- c(coefficients(fit_zn)[2],
+                coefficients(fit_indus)[2],
+                coefficients(fit_chas)[2],
+                coefficients(fit_nox)[2],
+                coefficients(fit_rm)[2],
+                coefficients(fit_age)[2],
+                coefficients(fit_dis)[2],
+                coefficients(fit_rad)[2],
+                coefficients(fit_tax)[2],
+                coefficients(fit_ptratio)[2],
+                coefficients(fit_black)[2],
+                coefficients(fit_lstat)[2],
+                coefficients(fit_medv)[2])
+
+y_variable <- c(coefficients(lm_fit3)[2:14])
+
+
+plot(x_variable,y_variable,xlab = "Univariate Regression Coefficients", ylab = "Multiple Regression Coefficients")
+
+```
+
+**Only ‘nox’ has a huge difference.**
+
+
+
+**(d) Is there evidence of non-linear association between any of the predictors and the response? To answer this question, for each predictor X, fit a model of the form**
+$$
+Y = \beta_0 + \beta_1X + \beta_1X^2 + \beta_3X^3 + \epsilon 
+$$
+```{r}
+fit_zn_muti <- lm(crim ~ zn + I(zn^2) + I(zn^3), data = Boston)
+summary(fit_zn_muti)
+```
+
+```{r}
+fit_indus_muti <- lm(crim ~ indus + I(indus^2) + I(indus^3), data = Boston)
+summary(fit_indus_muti)
+```
+
+```{r}
+fit_chas_muti <- lm(crim ~ chas + I(chas^2) + I(chas^3), data = Boston)
+summary(fit_chas_muti)
+```
+
+```{r}
+fir_nox_muti <- lm(crim ~ nox + I(nox^2) + I(nox^3), data = Boston)
+summary(fir_nox_muti)
+```
+
+```{r}
+fit_rm_muti <- lm(crim ~ rm + I(rm^2) + I(rm^3), data = Boston)
+summary(fit_rm_muti)
+```
+
+```{r}
+fit_age_muti <- lm(crim ~ age + I(age^2) + I(age^3), data = Boston)
+summary(fit_age_muti)
+```
+
+```{r}
+fit_dis_muti <- lm(crim ~ dis + I(dis^2) + I(dis^3), data = Boston)
+summary(fit_dis_muti)
+```
+
+```{r}
+fit_rad_muti <- lm(crim ~ rad + I(rad^2) + I(rad^3), data = Boston)
+summary(fit_rad_muti)
+```
+
+```{r}
+fit_tax_muti <- lm(crim ~ tax + I(tax^2) + I(tax^3), data = Boston)
+summary(fit_tax_muti)
+```
+
+```{r}
+fit_ptratio_muti <- lm(crim ~ ptratio + I(ptratio^2) + I(ptratio^3), 
+                       data = Boston)
+summary(fit_ptratio_muti)
+```
+
+```{r}
+fit_black_muti <- lm(crim ~ black + I(black^2) + I(black^3), data = Boston)
+summary(fit_black_muti)
+```
+
+```{r}
+fit_lstat_muti <- lm(crim ~ lstat + I(lstat^2) + I(lstat^3), data = Boston)
+summary(fit_lstat_muti)
+```
+
+```{r}
+fit_medv_muti <- lm(crim ~ medv + I(medv^2) + I(medv^3), data = Boston)
+summary(fit_medv_muti)
+```
+
+
+
+
+
+
