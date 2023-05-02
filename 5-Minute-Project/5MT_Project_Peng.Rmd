@@ -1,0 +1,147 @@
+---
+title: "5MT_Project_Peng"
+author: "Peng Yuan"
+date: '2023-02-01'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, load_tidyverse_pkg}
+library(tidyverse)
+library(lubridate)
+```
+
+```{r, read_binary_class_data}
+example_data_path <- "daily_citi_bike_trip_counts_and_weather.csv"
+
+df <- readr::read_csv(example_data_path, col_names = TRUE)
+df <- df %>% mutate(avg_temp = (max_temperature + min_temperature) /2 )
+df <- df %>% mutate(snow = ifelse(snow_depth != 0 | snowfall != 0, 'TRUE', 'FLASE'))
+summary(df)
+```
+
+
+```{r,avg_temp & trips box line diagram}
+ggplot(data = df, mapping = aes(x = avg_temp, y = trips)) + 
+  geom_boxplot() +
+  facet_wrap(~month)
+```
+```{r}
+df_mon <- data.frame(trips = df$trips,precipitation = df$precipitation,max_temperature = df$max_temperature,min_temperature = df$min_temperature,snow_depth = df$snow_depth)
+heatmap(cor(df_mon), Rowv = NA, Colv = NA ,revC=T, scale='none')
+
+```
+
+
+
+
+
+
+
+
+
+
+```{r}
+df <- df %>% mutate(temp_bin = cut(avg_temp,
+             breaks = seq(10,100, by = 10),
+             include.lowest = TRUE))
+df %>% group_by(temp_bin) %>% count()
+```
+
+```{r}
+df %>% ggplot() +
+       geom_bar(mapping = aes(x = temp_bin))
+
+
+df %>% ggplot() +
+       geom_bar(mapping = aes(x = temp_bin, fill = weekday)) + 
+       scale_color_brewer(palette = "Set1")
+```
+
+
+```{r}
+
+df %>% ggplot() +
+       geom_bar(mapping = aes(x = temp_bin, fill = snow)) + 
+       scale_color_brewer(palette = "Set1")
+
+
+df %>% ggplot() +
+                geom_bar(mapping = aes(x = temp_bin, fill = snow), position = "fill") + 
+                scale_color_brewer(palette = "Set1")
+```
+
+
+```{r}
+ggplot(data = df)+
+  geom_point(mapping = aes(x=avg_temp, y=trips))+
+  geom_smooth(mapping = aes(x=avg_temp, y=trips))
+
+
+
+ggplot(data = df)+
+  geom_point(mapping = aes(x=average_wind_speed, y=trips))+
+  geom_smooth(mapping = aes(x=average_wind_speed, y=trips))
+
+
+ggplot(data = df)+
+  geom_point(mapping = aes(x=avg_temp, y=trips))+
+  geom_smooth(mapping = aes(x=avg_temp, y=trips)) +
+  facet_wrap("month",scales = "free_y")
+
+ggplot(data = df)+
+  geom_point(mapping = aes(x=average_wind_speed, y=trips))+
+  geom_smooth(mapping = aes(x=average_wind_speed, y=trips)) +
+  facet_wrap("month",scales = "free_y")
+
+
+```
+
+
+
+
+```{r}
+df_trip_temp <- data.frame(trips = df$trips,average_wind_speed = df$average_wind_speed)
+
+fit_lm_1 <- lm(trips ~ average_wind_speed, as.data.frame(df))
+fit_lm_2 <- lm(trips ~ average_wind_speed + I(average_wind_speed^2), as.data.frame(df))
+fit_lm_3 <- lm(trips ~ average_wind_speed + I(average_wind_speed^2) + I(average_wind_speed^3), as.data.frame(df))
+fit_lm_4 <- lm(trips ~ average_wind_speed + I(average_wind_speed^2) + I(average_wind_speed^3) + I(average_wind_speed^4), as.data.frame(df))
+fit_lm_5 <- lm(trips ~ average_wind_speed + I(average_wind_speed^2) + I(average_wind_speed^3) + I(average_wind_speed^4) + I(average_wind_speed^5), as.data.frame(df))
+fit_lm_6 <- lm(trips ~ average_wind_speed + I(average_wind_speed^2) + I(average_wind_speed^3) + I(average_wind_speed^4) + I(average_wind_speed^5) + I(average_wind_speed^6), as.data.frame(df))
+
+
+```
+
+
+```{r}
+modelr::rmse(fit_lm_1,df_trip_temp)
+modelr::rmse(fit_lm_2,df_trip_temp)
+modelr::rmse(fit_lm_3,df_trip_temp)
+modelr::rmse(fit_lm_4,df_trip_temp)
+modelr::rmse(fit_lm_5,df_trip_temp)
+modelr::rmse(fit_lm_6,df_trip_temp)
+```
+
+
+```{r}
+modelr::rsquare(fit_lm_1,df_trip_temp)
+modelr::rsquare(fit_lm_2,df_trip_temp)
+modelr::rsquare(fit_lm_3,df_trip_temp)
+modelr::rsquare(fit_lm_4,df_trip_temp)
+modelr::rsquare(fit_lm_5,df_trip_temp)
+modelr::rsquare(fit_lm_6,df_trip_temp)
+```
+
+```{r}
+coefplot::multiplot(fit_lm_1,fit_lm_2,fit_lm_5,fit_lm_6)
+```
+
+
+
+
+
+
